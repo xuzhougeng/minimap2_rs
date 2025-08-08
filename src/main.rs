@@ -133,6 +133,11 @@ fn apply_preset(preset: &str, w: &mut i32, k: &mut i32, _hpc: &mut bool) {
 }
 
 fn load_index_auto(path: &str, w: i32, k: i32, b: i32, flag: i32) -> anyhow::Result<Index> {
+    // If given a minimap2 .mmi index, load directly
+    if path.ends_with(".mmi") {
+        return Index::load_from_mmi(path);
+    }
+    // Try loading our native index format; fall back to building from FASTA
     match Index::load_from_file(path) {
         Ok(idx) => Ok(idx),
         Err(_) => build_index_from_fasta(path, w, k, b, flag),

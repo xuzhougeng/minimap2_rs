@@ -356,6 +356,72 @@ impl Index {
         }
         Ok(Index{ w,k,b,flag, n_seq: n_seq_decl, seq, S, B })
     }
+
+    /// Load an index written in minimap2's MMI format by `save_to_mmi`
+    pub fn load_from_mmi(path: &str) -> anyhow::Result<Index> {
+        let mut f = std::fs::File::open(path)?;
+        // magic
+        let mut magic = [0u8; 4];
+        f.read_exact(&mut magic)?;
+        if &magic != b"MMI\x02" { anyhow::bail!("invalid MMI magic"); }
+        // header: w,k,b,n_seq,flag (u32)
+        let mut u32buf = [0u8; 4];
+        f.read_exact(&mut u32buf)?; let w = u32::from_le_bytes(u32buf) as i32;
+        f.read_exact(&mut u32buf)?; let k = u32::from_le_bytes(u32buf) as i32;
+        f.read_exact(&mut u32buf)?; let b = u32::from_le_bytes(u32buf) as i32;
+        f.read_exact(&mut u32buf)?; let n_seq = u32::from_le_bytes(u32buf);
+        f.read_exact(&mut u32buf)?; let flag = u32::from_le_bytes(u32buf) as i32;
+
+        // sequences
+        let mut seq: Vec<IndexSeq> = Vec::with_capacity(n_seq as usize);
+        let mut sum_len: u64 = 0;
+        for _ in 0..n_seq {
+            let mut lbuf = [0u8; 1];
+            f.read_exact(&mut lbuf)?; let name_len = lbuf[0] as usize;
+            let name = if name_len > 0 {
+                let mut nb = vec![0u8; name_len];
+                f.read_exact(&mut nb)?;
+                Some(String::from_utf8(nb).unwrap_or_else(|_| String::from("*")))
+            } else { None };
+            let mut len_buf = [0u8; 4];
+            f.read_exact(&mut len_buf)?; let len_u32 = u32::from_le_bytes(len_buf);
+            let offset = sum_len;
+            sum_len += len_u32 as u64;
+            seq.push(IndexSeq{ name, offset, len: len_u32, is_alt: false });
+        }
+
+        // buckets
+        let nbuckets: usize = 1usize << (b as usize);
+        let mut B: Vec<Bucket> = Vec::with_capacity(nbuckets);
+        for _ in 0..nbuckets {
+            // n (u32), then p array (u64[n])
+            let mut nbuf = [0u8; 4];
+            f.read_exact(&mut nbuf)?; let n = u32::from_le_bytes(nbuf) as usize;
+            let mut p = vec![0u64; n];
+            for i in 0..n { let mut vbuf = [0u8; 8]; f.read_exact(&mut vbuf)?; p[i] = u64::from_le_bytes(vbuf); }
+            // size (u32), then size entries of (key u64, val u64)
+            let mut sbuf = [0u8; 4];
+            f.read_exact(&mut sbuf)?; let size = u32::from_le_bytes(sbuf) as usize;
+            let mut h: Option<HashMap<u64,u64>> = None;
+            if size > 0 {
+                let mut map: HashMap<u64,u64> = HashMap::with_capacity(size);
+                for _ in 0..size {
+                    let mut kb = [0u8; 8]; let mut vb = [0u8; 8];
+                    f.read_exact(&mut kb)?; f.read_exact(&mut vb)?;
+                    map.insert(u64::from_le_bytes(kb), u64::from_le_bytes(vb));
+                }
+                h = Some(map);
+            }
+            B.push(Bucket{ a: Vec::new(), p, h });
+        }
+
+        // packed sequence array S: words = (sum_len + 7) / 8
+        let words = ((sum_len + 7) / 8) as usize;
+        let mut S: Vec<u32> = vec![0u32; words];
+        for i in 0..words { let mut wbuf = [0u8; 4]; f.read_exact(&mut wbuf)?; S[i] = u32::from_le_bytes(wbuf); }
+
+        Ok(Index{ w, k, b, flag, n_seq, seq, S, B })
+    }
 }
 
 pub fn build_index_from_fasta(path: &str, w: i32, k: i32, b: i32, flag: i32) -> anyhow::Result<Index> {
