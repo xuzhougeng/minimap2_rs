@@ -11,10 +11,18 @@ chat目录下是我的对话过程，全程vibe coding. 没有编程，全是观
 
 # minimap2 rust版本的索引
 minimap2 -v0 test/index.mmi test/test.fa
-chr8    600     6       598     +       chr8    145138636       5999346 5999938 592     592     60      tp:A:Pcm:i:114 s1:i:592        s2:i:44 dv:f:0.0006     rl:i:0
+# chr8    600     6       598     +       chr8    145138636       5999346 5999938 592     592     60      tp:A:Pcm:i:114 s1:i:592        s2:i:44 dv:f:0.0006     rl:i:0
 
 # minimap2自己的索引
 minimap2 -v0 test/index test/test.fa    
-chr8    600     6       598     +       chr8    145138636       5999346 5999938 592     592     60      tp:A:Pcm:i:114 s1:i:592        s2:i:44 dv:f:0.0006     rl:i:0
+# chr8    600     6       598     +       chr8    145138636       5999346 5999938 592     592     60      tp:A:Pcm:i:114 s1:i:592        s2:i:44 dv:f:0.0006     rl:i:0
+```
+
+当然比对结果基本上一样，除了dv有点区别。
+
+```bash
+target/release/mm2rs align test/index.mmi test/test.fa
+
+#chr8    600     6       598     +       chr8    145138636       5999346 5999938 592     592     60      tp:A:Pcm:i:114 s1:i:592        s2:i:0  dv:f:0.0000     rl:i:0
 ```
 
